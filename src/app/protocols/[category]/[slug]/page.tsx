@@ -8,6 +8,7 @@ import { getAllProtocols, getProtocolBySlug } from "@/data";
 import { codeExamples } from "@/data/code-examples";
 import { pythonExampleBySlug } from "@/data/python-examples";
 import { pythonSources } from "@/data/python-sources";
+import { samplePacketBySlug } from "@/data/sample-packets";
 import { categories, siteConfig } from "@/data/site";
 
 export function generateStaticParams() {
@@ -68,6 +69,7 @@ export default async function ProtocolDetailPage({
   );
   const pythonMeta = pythonExampleBySlug[p.slug];
   const pythonSource = pythonSources[p.slug];
+  const samplePacket = samplePacketBySlug[p.slug];
 
   const toc: TocItem[] = [
     { id: "overview", label: "协议概览" },
@@ -76,8 +78,16 @@ export default async function ProtocolDetailPage({
     { id: "dictionary", label: "数据字典" },
     { id: "commands", label: "命令与查询" },
     { id: "sample", label: "报文示例" },
+    ...(samplePacket ? [{ id: "packets", label: "样本数据包" }] : []),
     { id: "python", label: "Python 实现" },
-    { id: "code", label: "连接示例" },
+    {
+      id: "code",
+      label: "连接示例",
+      children: [
+        { id: "code-csharp", label: "C# 实现" },
+        { id: "code-java", label: "Java 实现" },
+      ],
+    },
     { id: "sources", label: "参考来源" },
     { id: "related", label: "相关协议" },
   ];
@@ -280,35 +290,158 @@ export default async function ProtocolDetailPage({
             </div>
 
             <h2 id="sample">报文示例</h2>
-            <p>以下为一条示例报文的十六进制形式与逐段解读：</p>
-            <div className="code-block">
-              <div className="code-block__head">
-                <span className="code-block__meta">报文示例 · HEX</span>
-              </div>
-              <pre className="code-pre">
-                <code>{p.sampleHex}</code>
-              </pre>
-            </div>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>字节</th>
-                    <th>含义</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {p.decode.map((d, i) => (
-                    <tr key={i}>
-                      <td>
-                        <code>{d.hex}</code>
-                      </td>
-                      <td>{d.desc}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {p.sampleText ? (
+              <>
+                <p>
+                  以下为一条示例报文的原始字符串形式与逐段解读。本协议为文本协议，
+                  报文本身就是可读的字符序列，无需按十六进制解读；
+                  表中的{" "}
+                  <code>␍</code> 表示段结束符 CR（0x0D）。
+                </p>
+                <div className="code-block">
+                  <div className="code-block__head">
+                    <span className="code-block__meta">报文示例 · 文本</span>
+                  </div>
+                  <pre className="code-pre">
+                    <code>{p.sampleDisplay}</code>
+                  </pre>
+                </div>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>片段</th>
+                        <th>含义</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {p.decode.map((d, i) => (
+                        <tr key={i}>
+                          <td>
+                            <code>{d.text ?? d.hex}</code>
+                          </td>
+                          <td>{d.desc}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <>
+                <p>以下为一条示例报文的十六进制形式与逐段解读：</p>
+                <div className="code-block">
+                  <div className="code-block__head">
+                    <span className="code-block__meta">报文示例 · HEX</span>
+                  </div>
+                  <pre className="code-pre">
+                    <code>{p.sampleHex}</code>
+                  </pre>
+                </div>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>字节</th>
+                        <th>含义</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {p.decode.map((d, i) => (
+                        <tr key={i}>
+                          <td>
+                            <code>{d.hex}</code>
+                          </td>
+                          <td>{d.desc}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {samplePacket && (
+              <>
+                <h2 id="packets">样本数据包</h2>
+                <p>
+                  上方示例报文已打包为可直接下载的样本文件，可在接设备之前先用它验证自己的解析器。
+                </p>
+                <div className="sample-card">
+                  <div className="sample-card__head">
+                    <div>
+                      <p className="sample-card__brand">样本包</p>
+                      <h3 className="sample-card__title">
+                        {samplePacket.title}
+                      </h3>
+                    </div>
+                    <span className="sample-card__size">
+                      {samplePacket.byteLength} 字节
+                    </span>
+                  </div>
+
+                  <dl className="sample-card__meta">
+                    <div>
+                      <dt>覆盖型号</dt>
+                      <dd>{samplePacket.models.join("、")}</dd>
+                    </div>
+                    <div>
+                      <dt>通讯参数</dt>
+                      <dd>{samplePacket.baud}</dd>
+                    </div>
+                  </dl>
+
+                  <div className="sample-card__files">
+                    <a
+                      className="sample-file"
+                      href={`/${samplePacket.dir}/${samplePacket.files.bin}`}
+                      download
+                    >
+                      <span className="sample-file__ext">.bin</span>
+                      <span className="sample-file__desc">原始字节</span>
+                    </a>
+                    <a
+                      className="sample-file"
+                      href={`/${samplePacket.dir}/${samplePacket.files.hex}`}
+                      download
+                    >
+                      <span className="sample-file__ext">.hex</span>
+                      <span className="sample-file__desc">十六进制</span>
+                    </a>
+                    <a
+                      className="sample-file"
+                      href={`/${samplePacket.dir}/${samplePacket.files.txt}`}
+                      download
+                    >
+                      <span className="sample-file__ext">.txt</span>
+                      <span className="sample-file__desc">逐段说明</span>
+                    </a>
+                    {samplePacket.files.raw && (
+                      <a
+                        className="sample-file"
+                        href={`/${samplePacket.dir}/${samplePacket.files.raw}`}
+                        download
+                      >
+                        <span className="sample-file__ext">.raw</span>
+                        <span className="sample-file__desc">报文原文</span>
+                      </a>
+                    )}
+                  </div>
+
+                  {samplePacket.hasTextTerminator && (
+                    <p className="sample-card__note">
+                      该协议为文本协议，样本文件在报文末尾补上了消息结束符，
+                      使其成为一条可直接解析的完整消息。
+                    </p>
+                  )}
+
+                  <p className="sample-card__note">
+                    全部设备的样本包见{" "}
+                    <Link href="/samples/">样本数据包下载页</Link>。
+                  </p>
+                </div>
+              </>
+            )}
 
             <AdSlot format="inline" />
 
@@ -317,8 +450,7 @@ export default async function ProtocolDetailPage({
                 <h2 id="python">Python 实现</h2>
                 <p>
                   下面是针对本协议生成的 Python 3 帧解析器。它按本页「帧格式」表的结构
-                  定义实现：起始符定位、长度字段推导、校验和验证、数据区参数解析，
-                  与上方「报文示例」表逐段对应。
+                  定义实现，与上方「报文示例」表逐段对应。
                 </p>
                 <div className="callout callout--info">
                   <span className="callout__icon" aria-hidden="true">
@@ -357,7 +489,7 @@ export default async function ProtocolDetailPage({
 
             {csharpExample && (
               <>
-                <h3>C# 实现</h3>
+                <h3 id="code-csharp">C# 实现</h3>
                 <CodeBlock
                   code={csharpExample.code}
                   filename={csharpExample.filename}
@@ -367,7 +499,7 @@ export default async function ProtocolDetailPage({
             )}
             {javaExample && (
               <>
-                <h3>Java 实现</h3>
+                <h3 id="code-java">Java 实现</h3>
                 <CodeBlock
                   code={javaExample.code}
                   filename={javaExample.filename}

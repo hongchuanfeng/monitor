@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "gen:ads": "node scripts/gen-ad-images.mjs"
+    "gen:ads": "node scripts/gen-ad-images.mjs",
+    "gen:protocols": "node scripts/gen-protocol-data.mjs && node scripts/apply-protocol-data.mjs",
+    "gen:python": "node scripts/gen-python-examples.mjs",
+    "gen:samples": "node scripts/gen-sample-packets.mjs",
+    "check:samples": "node scripts/check-samples.mjs"
   },
   "dependencies": {
     "next": "^16.4.6",

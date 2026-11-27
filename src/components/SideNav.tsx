@@ -1,14 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export type TocItem = { id: string; label: string; children?: TocItem[] };
+
+/** 扁平化后的目录项，isChild 用于区分层级 */
+type FlatItem = TocItem & { isChild: boolean };
 
 export default function SideNav({ items }: { items: TocItem[] }) {
   const [activeId, setActiveId] = useState(items[0]?.id ?? "");
 
+  // 顶层项与其子项都是锚点目标，展开成一份扁平列表
+  const flat = useMemo<FlatItem[]>(
+    () =>
+      items.flatMap((i) => [
+        { ...i, isChild: false },
+        ...(i.children ?? []).map((c) => ({ ...c, isChild: true })),
+      ]),
+    [items],
+  );
+
   useEffect(() => {
-    const targets = items
+    const targets = flat
       .map((i) => document.getElementById(i.id))
       .filter((el): el is HTMLElement => el !== null);
 
@@ -28,9 +41,7 @@ export default function SideNav({ items }: { items: TocItem[] }) {
 
     targets.forEach((t) => observer.observe(t));
     return () => observer.disconnect();
-  }, [items]);
-
-  const flat = items.flatMap((i) => [i, ...(i.children ?? [])]);
+  }, [flat]);
 
   return (
     <nav className="proto-toc" aria-label="本页目录">
@@ -38,8 +49,7 @@ export default function SideNav({ items }: { items: TocItem[] }) {
         <a
           key={item.id}
           href={`#${item.id}`}
-          className={`proto-toc__item${activeId === item.id ? " active" : ""}`}
-          style={item.children ? { paddingLeft: 14, fontSize: 13.5 } : undefined}
+          className={`proto-toc__item${item.isChild ? " proto-toc__item--child" : ""}${activeId === item.id ? " active" : ""}`}
         >
           {item.label}
         </a>

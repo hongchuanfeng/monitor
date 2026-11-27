@@ -1,5 +1,6 @@
 import { getAllBrands, getAllProtocols } from "@/data";
 import { codeExamples } from "@/data/code-examples";
+import { samplePackets } from "@/data/sample-packets";
 import { categories } from "@/data/site";
 import type { SearchDoc } from "@/components/SearchOverlay";
 
@@ -57,6 +58,23 @@ export function buildSearchIndex(): SearchDoc[] {
       keywords: [b.name, b.slug, ...b.models, ...b.interfaces].join(" "),
     });
   }
+
+  docs.push({
+    kind: "样本数据包",
+    title: "样本数据包下载",
+    excerpt: `收录 ${samplePackets.length} 个设备的样本报文，可下载原始字节、十六进制文本与逐段说明。`,
+    href: "/samples/",
+    keywords: [
+      "样本数据包",
+      "样本报文",
+      "sample",
+      "bin",
+      "hex",
+      "下载",
+      "解析器自检",
+      ...samplePackets.map((p) => p.title),
+    ].join(" "),
+  });
 
   return docs;
 }

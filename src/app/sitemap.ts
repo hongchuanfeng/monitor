@@ -16,6 +16,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: "/protocols/", priority: 0.9, freq: "weekly" },
     { path: "/protocols/monitor/", priority: 0.9, freq: "weekly" },
     { path: "/protocols/anesthesia/", priority: 0.9, freq: "weekly" },
+    { path: "/samples/", priority: 0.8, freq: "weekly" },
     { path: "/code/", priority: 0.9, freq: "monthly" },
     { path: "/brands/", priority: 0.8, freq: "weekly" },
     { path: "/sitemap/", priority: 0.5, freq: "weekly" },

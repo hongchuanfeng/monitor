@@ -96,6 +96,45 @@ for (const p of all) {
     }
   }
 
+  // 文本协议：报文原文与展示文本必须与字节流一致
+  if (p.sampleText !== undefined) {
+    const raw = Buffer.from(p.sampleText, "ascii");
+    if (raw.length !== sampleBytes.length) {
+      issues.push(
+        `报文原文长度不一致: sampleText ${raw.length} 字节, sampleHex ${sampleBytes.length} 字节`,
+      );
+    } else {
+      for (let i = 0; i < raw.length; i++) {
+        if (raw[i] !== sampleBytes[i]) {
+          issues.push(
+            `报文原文第 ${i + 1} 字节不一致: sampleText=${hex(raw[i])}, sampleHex=${hex(sampleBytes[i])}`,
+          );
+          break;
+        }
+      }
+    }
+
+    // 展示文本每段占一行，还原后应与原文一致
+    if (p.sampleDisplay !== undefined) {
+      const restored = p.sampleDisplay.replace(/\n/g, "\r");
+      if (restored !== p.sampleText) {
+        issues.push(`展示文本还原后与报文原文不一致`);
+      }
+    }
+  }
+
+  // 文本协议的每个分段都应给出可读片段
+  if (p.sampleText !== undefined) {
+    const joined = p.decode
+      .map((d) => d.text)
+      .join("")
+      .split("\u240D")
+      .join("\r");
+    if (joined !== p.sampleText) {
+      issues.push(`分段片段拼接后与报文原文不一致`);
+    }
+  }
+
   if (issues.length) {
     problems++;
     console.log(`\n[问题] ${p.slug}  (${p.brand})`);

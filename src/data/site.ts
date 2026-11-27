@@ -11,6 +11,7 @@ export const siteConfig = {
 
 export const navLinks = [
   { href: "/protocols/", label: "协议" },
+  { href: "/samples/", label: "样本包" },
   { href: "/code/", label: "代码示例" },
   { href: "/brands/", label: "品牌" },
   { href: "/about/", label: "关于" },

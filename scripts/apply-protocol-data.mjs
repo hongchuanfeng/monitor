@@ -12,7 +12,7 @@ const SRC = resolve(ROOT, "scripts/.protocol-samples.txt");
 
 const text = readFileSync(SRC, "utf8");
 
-// 解析生成的文件：### slug (brand title) / sampleHex / decode 行
+// 解析生成的文件：### slug (brand title) / sampleHex / sampleText / decode 行
 const blocks = text.split(/^### /m).filter(Boolean);
 const updates = new Map();
 
@@ -23,14 +23,29 @@ for (const block of blocks) {
   const hexMatch = block.match(/sampleHex:\s*"([^"]+)"/);
   if (!hexMatch) throw new Error(`缺少 sampleHex: ${slug}`);
 
+  // 文本协议额外给出报文原文与多行展示文本
+  const textMatch = block.match(/sampleText:\s*("(?:[^"\\]|\\.)*")/);
+  const displayMatch = block.match(/sampleDisplay:\s*("(?:[^"\\]|\\.)*")/);
+
   const decodes = [];
   for (const line of lines) {
-    const m = line.match(/^\s*\{ hex: "([^"]+)", desc: (".*") \},?\s*$/);
-    if (m) decodes.push({ hex: m[1], desc: JSON.parse(m[2]) });
+    const m = line.match(/^\s*\{ hex: "([^"]+)", desc: (".*?)(?:, text: (".*?"))? \},?\s*$/);
+    if (m) {
+      decodes.push({
+        hex: m[1],
+        desc: JSON.parse(m[2]),
+        text: m[3] === undefined ? undefined : JSON.parse(m[3]),
+      });
+    }
   }
   if (!decodes.length) throw new Error(`缺少 decode: ${slug}`);
 
-  updates.set(slug, { sampleHex: hexMatch[1], decode: decodes });
+  updates.set(slug, {
+    sampleHex: hexMatch[1],
+    sampleText: textMatch ? JSON.parse(textMatch[1]) : undefined,
+    sampleDisplay: displayMatch ? JSON.parse(displayMatch[1]) : undefined,
+    decode: decodes,
+  });
 }
 
 // ---- 写回源文件 ----------------------------------------------------------
@@ -63,7 +78,14 @@ for (const t of targets) {
     while (probe < src.length) {
       const nextLineEnd = src.indexOf("\n", probe);
       const nextLine = src.slice(probe, nextLineEnd < 0 ? src.length : nextLineEnd);
+      // 续行：同一次赋值的多行字符串
       if (/^\s*"/.test(nextLine)) {
+        hexTail = nextLineEnd < 0 ? src.length : nextLineEnd;
+        probe = hexTail + 1;
+        continue;
+      }
+      // 文本协议的报文原文字段：重跑脚本时先吃掉旧值，避免重复写入
+      if (/^\s*sample(Text|Display):/.test(nextLine)) {
         hexTail = nextLineEnd < 0 ? src.length : nextLineEnd;
         probe = hexTail + 1;
         continue;
@@ -78,12 +100,24 @@ for (const t of targets) {
     if (decEnd < 0) throw new Error(`${slug}: decode 数组未闭合`);
 
     const decBody = upd.decode
-      .map((d) => `    { hex: "${d.hex}", desc: ${JSON.stringify(d.desc)} },`)
+      .map((d) => {
+        const textField =
+          d.text === undefined ? "" : `, text: ${JSON.stringify(d.text)}`;
+        return `    { hex: "${d.hex}", desc: ${JSON.stringify(d.desc)}${textField} },`;
+      })
       .join("\n");
+
+    // 文本协议在 sampleHex 之后补写报文原文与多行展示文本
+    const textFields =
+      upd.sampleText === undefined
+        ? ""
+        : `\n${hexPrefix.replace("sampleHex:", "sampleText:")}${JSON.stringify(upd.sampleText)},` +
+          `\n${hexPrefix.replace("sampleHex:", "sampleDisplay:")}${JSON.stringify(upd.sampleDisplay)},`;
 
     src =
       src.slice(0, hexIdx) +
       `${hexPrefix}"${upd.sampleHex}",` +
+      textFields +
       src.slice(hexTail, decIdx) +
       "decode: [\n" +
       decBody +

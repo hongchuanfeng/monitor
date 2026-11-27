@@ -66,6 +66,8 @@ export type PythonExample = {
   keywords?: { keyword: string; name: string; unit?: string; desc: string }[];
   /** 命令码说明（二进制协议） */
   commands?: { code: string; name: string; desc: string }[];
+  /** 观察标识映射表（HL7 协议）：LOINC 编码 -> 名称/单位 */
+  observations?: { code: string; name: string; unit?: string; note?: string }[];
   /** 该协议用到的额外说明，会出现在代码注释里 */
   notes?: string[];
 };
@@ -128,20 +130,18 @@ export const pythonExamples: PythonExample[] = [
   },
   {
     slug: "mindray-benevision-n22",
-    kind: "mindray",
+    kind: "hl7",
     filename: "mindray_benevision_parser.py",
-    payloadLayout: "mindray-benevision",
-    params: [
-      { id: 0x0004, name: "HR", unit: "bpm", scale: 1, note: "心率" },
-    ],
-    commands: [
-      { code: "0x00", name: "握手", desc: "以太网通道必须先完成握手，否则设备不推送数据" },
-      { code: "0x01", name: "实时数据订阅", desc: "订阅是持久状态，断开后需重新订阅" },
-      { code: "0x21", name: "读取报警", desc: "条目数量可变，需先读条目数再循环" },
-    ],
+    payloadLayout: "text",
     notes: [
-      "长度字段只计算控制字段之后的数据区长度，不含起始符、长度字段本身、CRC 与结束符。",
-      "同一份命令集复用于以太网 NetComm 通道，解析器可直接复用。",
+      "HL7 消息以 0x0D 分隔段、0x1C 分隔消息，采集端必须自己维护缓冲区来切分。",
+      "测量值承载在 OBX 段，OBX-3 的首个组件是 LOINC 编码，跨厂商映射以它为准。",
+      "设备输出为事件驱动，采集端不应假设固定推送周期。",
+    ],
+    observations: [
+      { code: "8867-4", name: "HR", unit: "bpm", note: "心率 LOINC 编码" },
+      { code: "2708-6", name: "SpO2", unit: "%", note: "血氧饱和度 LOINC 编码" },
+      { code: "9279-1", name: "RR", unit: "/min", note: "呼吸频率 LOINC 编码" },
     ],
   },
   {
@@ -427,6 +427,11 @@ export const pythonExamples: PythonExample[] = [
       "同一套 HL7 解析器可以覆盖多品牌麻醉机，是多品牌混合手术室的推荐路径。",
       "参数标识的跨厂商映射是实际难点，需要建立厂商到标准编码的映射表。",
       "设备输出通常是事件驱动而非周期驱动，采集端不应假设固定周期。",
+    ],
+    observations: [
+      { code: "8867-4", name: "HR", unit: "bpm", note: "心率 LOINC 编码" },
+      { code: "2708-6", name: "SpO2", unit: "%", note: "血氧饱和度 LOINC 编码" },
+      { code: "9279-1", name: "RR", unit: "/min", note: "呼吸频率 LOINC 编码" },
     ],
   },
 ];

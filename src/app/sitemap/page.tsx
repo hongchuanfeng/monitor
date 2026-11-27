@@ -56,6 +56,9 @@ export default function SitemapPage() {
               </li>
             ))}
             <li>
+              <Link href="/samples/">样本数据包下载</Link>
+            </li>
+            <li>
               <Link href="/code/">代码示例</Link>
             </li>
             <li>

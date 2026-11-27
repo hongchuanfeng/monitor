@@ -99,6 +99,7 @@ function loadMeta() {
       params: [],
       keywords: [],
       commands: [],
+      observations: [],
       notes: [],
       payloadOffset: null,
       payloadLayout: null,
@@ -150,6 +151,21 @@ function loadMeta() {
       let cm;
       while ((cm = cRe.exec(cmdM[1]))) {
         ex.commands.push({ code: cm[1], name: cm[2], desc: cm[3] });
+      }
+    }
+
+    const obsM = rest.match(/observations:\s*\[([\s\S]*?)\n    \],/);
+    if (obsM) {
+      const oRe =
+        /\{\s*code:\s*"([^"]+)",\s*name:\s*"([^"]+)"(?:,\s*unit:\s*"([^"]*)")?(?:,\s*note:\s*"([^"]*)")?\s*\}/g;
+      let om;
+      while ((om = oRe.exec(obsM[1]))) {
+        ex.observations.push({
+          code: om[1],
+          name: om[2],
+          unit: om[3] ?? "",
+          note: om[4],
+        });
       }
     }
 
@@ -642,8 +658,8 @@ if __name__ == "__main__":
 
 // ---------------------------------------------------------------- 文本协议
 
-function genText(ex, sampleHex, kind) {
-  if (kind === "hl7") return genHl7(ex, sampleHex);
+function genText(ex, sampleHex, kind, sampleText) {
+  if (kind === "hl7") return genHl7(ex, sampleHex, sampleText);
 
   const isKeyValue = kind === "key-value";
   const isNmea = kind === "nmea";
@@ -848,15 +864,41 @@ if __name__ == "__main__":
 }
 
 /** HL7 v2 解析器 */
-function genHl7(ex, sampleHex) {
-  return `"""HL7 v2 通用解析器（Python 3.10+）
+function genHl7(ex, sampleHex, sampleText) {
+  // 观察标识映射表：编码 -> (标准名称, 单位)
+  // 真实项目里这张表来自接口配置文档，跨厂商统一时也靠它做归一化。
+  // 即使该协议没有登记映射项，也要生成空表，否则生成代码里会引用到未定义的名字。
+  const observationTable = [
+    "# 观察标识映射表：编码 -> (标准名称, 单位)",
+    "OBSERVATION_MAP: dict[str, tuple[str, str]] = {",
+    ...(ex.observations ?? []).map(
+      (o) =>
+        `    ${JSON.stringify(o.code)}: (${JSON.stringify(o.name)}, ${JSON.stringify(o.unit ?? "")}),` +
+        (o.note ? `  # ${o.note}` : ""),
+    ),
+    "}",
+    "",
+  ].join("\n");
+
+  // 报文示例：HL7 报文本身就是可读字符串，直接按文本展示更贴近实际使用场景。
+  // 段之间原本是回车 0x0D，这里换成换行显示，并补一句说明，避免读者以为段是拼在一起的。
+  // 注意编码字符集里含 ^~\&，因此 docstring 用 r""" 前缀，避免 \& 被当成转义序列。
+  const sampleBlock = sampleText
+    ? sampleText
+        .replace(/\r/g, "\n")
+        .replace(/\n$/, "")
+        .split("\n")
+        .join("\n    ")
+    : sampleHex;
+
+  return `r"""HL7 v2 通用解析器（Python 3.10+）
 
 ${docstring(ex.notes)}HL7 v2 的两个标志性控制字节：0x0D 作为段分隔符，0x1C 作为消息分隔符。
 最常用的消息类型是 ORU^R01（观察结果），测量值承载在 OBX 段中。
 
-本示例可直接解析协议页给出的示例报文：
+本示例可直接解析协议页给出的示例报文（每段以回车 0x0D 结束，此处按行显示）：
 
-    ${sampleHex}
+    ${sampleBlock}
 
 运行：python ${ex.filename}
 """
@@ -865,10 +907,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-
+${observationTable}
 @dataclass
 class Segment:
-    """一个 HL7 段。"""
+    """一个 HL7 段。
+
+    MSH 段的字段编号有特例：MSH-1 本身就是字段分隔符，
+    因此这里把分隔符补在首位，使 MSH 与其他段的编号规则保持一致。
+    """
 
     name: str
     fields: list[str] = field(default_factory=list)
@@ -896,6 +942,34 @@ class Message:
             result.append(
                 (segment.get(3), segment.get(5), segment.get(6), segment.get(11))
             )
+        return result
+
+    @property
+    def measurements(self) -> list[tuple[str, str, float, str]]:
+        """把 OBX 解析成工程值，返回 (标准名称, 原始标识, 数值, 单位)。
+
+        OBX-3 观察标识形如 "8867-4^Heart rate^LN"，首个组件是编码，
+        后两个组件是名称与编码系统。查映射表把编码换成统一名称，
+        查不到时回退到编码本身，避免新增观察项导致数据被丢弃。
+        """
+        result = []
+        for segment in self.segments:
+            if segment.name != "OBX":
+                continue
+            if segment.get(2) not in ("NM", ""):
+                # 非数值型观察结果跳过，避免强转失败
+                continue
+            raw_value = segment.get(5)
+            if raw_value == "":
+                continue
+            identifier = segment.get(3)
+            code = identifier.split("^")[0]
+            name, unit = OBSERVATION_MAP.get(code, (code, segment.get(6)))
+            try:
+                value = float(raw_value)
+            except ValueError:
+                continue
+            result.append((name, identifier, value, unit or segment.get(6)))
         return result
 
 
@@ -956,6 +1030,9 @@ class Hl7Parser:
         name = parts[0]
         if not name or not name[0].isalpha():
             return None
+        if name == "MSH":
+            # MSH-1 就是字段分隔符本身，补到首位让编号与其他段对齐
+            parts = [name, self._field_sep, *parts[1:]]
         return Segment(name=name, fields=parts[1:])
 
 
@@ -973,6 +1050,8 @@ if __name__ == "__main__":
             print(f"{segment.name}: {segment.fields}")
         for name, value, unit, status in message.observations:
             print(f"观察结果 {name} = {value} {unit} (状态 {status})")
+        for name, identifier, value, unit in message.measurements:
+            print(f"测量值 {name} = {value} {unit}  <- {identifier}")
 `;
 }
 
@@ -982,11 +1061,22 @@ const { specs, examples } = loadMeta();
 
 // 读取每个协议的示例报文
 const sampleMap = new Map();
+const sampleTextMap = new Map();
 for (const file of ["src/data/protocols-monitor.ts", "src/data/protocols-anesthesia.ts"]) {
   const src = readFileSync(resolve(ROOT, file), "utf8");
-  const re = /slug:\s*"([^"]+)"[\s\S]*?sampleHex:\s*"([^"]+)"/g;
-  let m;
-  while ((m = re.exec(src))) sampleMap.set(m[1], m[2]);
+
+  // 按协议对象切块，避免跨协议匹配到别人的字段
+  for (const block of src.split(/const \w+: Protocol = \{/).slice(1)) {
+    const slug = block.match(/slug:\s*"([^"]+)"/)?.[1];
+    if (!slug) continue;
+
+    const sampleHex = block.match(/sampleHex:\s*"([^"]+)"/)?.[1];
+    if (sampleHex) sampleMap.set(slug, sampleHex);
+
+    // 文本协议（HL7）另有报文原文，示例代码里直接展示字符串形式
+    const sampleText = block.match(/sampleText:\s*("(?:[^"\\]|\\.)*")/)?.[1];
+    if (sampleText) sampleTextMap.set(slug, JSON.parse(sampleText));
+  }
 }
 
 // ---- 自检：在 JS 里复算一遍解析结果，与参数表对照 -------------------------
@@ -1111,7 +1201,7 @@ for (const ex of examples) {
   ]);
 
   const code = textKinds.has(ex.kind)
-    ? genText(ex, sampleHex, ex.kind)
+    ? genText(ex, sampleHex, ex.kind, sampleTextMap.get(ex.slug))
     : genBinary(ex, spec, sampleHex);
 
   sources[ex.slug] = { filename: ex.filename, code };

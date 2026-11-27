@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 export type SearchDoc = {
-  kind: "协议页" | "代码示例" | "品牌";
+  kind: "协议页" | "代码示例" | "品牌" | "样本数据包";
   title: string;
   excerpt: string;
   href: string;

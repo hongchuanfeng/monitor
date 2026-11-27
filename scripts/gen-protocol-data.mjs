@@ -14,6 +14,7 @@
 import { rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { CR_MARK, toMessage } from "./lib/text-display.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CHECK_ONLY = process.argv.includes("--check");
@@ -87,6 +88,91 @@ function binary({ slug, brand, title, start, preLength = [], lenSize = 0, lenEnd
 
       const full = [...frame, ...csBytes, ...end];
       return { frame: full, segments, csOffset, total };
+    },
+  });
+}
+
+/**
+ * HL7 v2 消息。
+ *
+ * HL7 的消息结构是「段 + 字段」两层：段以 0x0D 结束，字段以竖线分隔，
+ * 组件再以 ^ 分隔。因此这里按「段 -> 字段列表」描述，
+ * 由本函数拼装出报文，并自动生成与字段一一对应的解码分段，
+ * 避免手写偏移导致段与字节对不上。
+ *
+ * fields 数组的第一个元素固定为段类型名（MSH / OBX / PID ...），
+ * 其余元素按顺序为该段的字段。
+ *
+ * 字段编号有个例外：MSH-1 本身就是字段分隔符竖线，
+ * 它由 join 时插入的分隔符承担，因此 MSH 段 fields[1] 对应的是 MSH-2；
+ * 其余段 fields[1] 对应字段 1。
+ *
+ * descs 为「字段编号 -> 中文说明」的映射，省略的字段使用自动生成的说明。
+ */
+function hl7({ slug, brand, title, segments }) {
+  protocols.push({
+    slug,
+    brand,
+    title,
+    kind: "text",
+    /** HL7 是文本协议，页面与样本包均以字符串形式展示报文 */
+    isText: true,
+    build() {
+      // 每段都以 0x0D 结束，最后一段同样带段结束符
+      const text = segments.map((seg) => `${seg.fields.join("|")}\r`).join("");
+
+      const frame = ascii(text);
+      const resolved = [];
+      let cursor = 0;
+
+      for (const seg of segments) {
+        const parts = seg.fields;
+        const isMsh = parts[0] === "MSH";
+        // MSH 段的字段编号整体后移一位：MSH-1 是分隔符本身
+        const fieldNo = (i) => (isMsh ? i + 1 : i);
+
+        for (let i = 0; i < parts.length; i++) {
+          const len = parts[i].length + (i < parts.length - 1 ? 1 : 0);
+          if (len === 0) continue;
+
+          let desc;
+          if (i === 0) {
+            desc = `段标识 ${parts[0]}${isMsh ? "，其后紧跟字段分隔符竖线 0x7C。" : "。"}`;
+          } else if (parts[i] === "") {
+            desc = `${parts[0]}-${fieldNo(i)}，留空。`;
+          } else {
+            desc = seg.descs?.[fieldNo(i)] ?? `${parts[0]}-${fieldNo(i)} 字段。`;
+          }
+
+          // 分段文本与十六进制一一对应：CR 在表格里显示为可见占位符 ␍
+          const raw = text.slice(cursor, cursor + len);
+          resolved.push({
+            span: [cursor, cursor + len],
+            desc,
+            text: raw.replace(/\r/g, CR_MARK),
+          });
+          cursor += len;
+        }
+
+        // 段结束符 0x0D
+        resolved.push({
+          span: [cursor, cursor + 1],
+          desc: `回车 0x0D，${parts[0]} 段结束。`,
+          text: CR_MARK,
+        });
+        cursor += 1;
+      }
+
+      return {
+        frame,
+        segments: resolved,
+        csOffset: null,
+        total: null,
+        /** 报文原文，供页面按字符串展示 */
+        text: text,
+        /** 多行展示文本，每个 HL7 段占一行 */
+        display: toMessage(text),
+      };
     },
   });
 }
@@ -184,24 +270,107 @@ text({
   ],
 });
 
-binary({
+hl7({
   slug: "mindray-benevision-n22",
   brand: "Mindray（迈瑞）",
   title: "BeneVision N",
-  start: [0x7e],
-  lenSize: 1,
-  body: [0x00, 0x01, 0x04, 0x00, 0x5a, 0x00],
-  checksum: { kind: "crc16-ccitt", size: 2, endian: "le", coverStart: 1 },
-  end: [0x7e],
   segments: [
-    { span: [0, 1], desc: "起始符 0x7E。" },
-    { span: [1, 2], desc: "数据区长度 6 字节，计数到校验字段之前。" },
-    { span: [2, 3], desc: "控制字段 0x00，表示请求方向的数据。" },
-    { span: [3, 4], desc: "命令码 0x01，对应实时数据订阅。" },
-    { span: [4, 6], desc: "参数编号 0x0004，对应心率测量项。" },
-    { span: [6, 8], desc: "参数原始值 0x005A，按缩放因子换算后为 90 bpm。" },
-    { span: [8, 10], desc: "CRC16 校验值，小端序。" },
-    { span: [10, 11], desc: "结束符 0x7E。" },
+    {
+      fields: [
+        "MSH",
+        "^~\\&",
+        "MINDRAY",
+        "BENEVISION N22",
+        "MEDCOLLECTOR",
+        "",
+        "20261126120000",
+        "",
+        "ORU^R01",
+        "1",
+        "P",
+        "2.5",
+      ],
+      descs: {
+        2: "MSH-2 编码字符集 ^~\\&，表示 UTF-8（Unicode 2.2）。",
+        3: "MSH-3 发送方应用 MINDRAY，标识数据来自迈瑞监护仪。",
+        4: "MSH-4 发送方设施 BENEVISION N22，标识具体设备型号与床位。",
+        5: "MSH-5 接收方应用 MEDCOLLECTOR，标识本条消息发往的采集端。",
+        6: "MSH-6 接收方设施，此处留空。",
+        7: "MSH-7 消息时间 20261126120000。",
+        8: "MSH-8 安全信息，此处留空。",
+        9: "MSH-9 消息类型 ORU^R01，监护机数据以观察结果形式上报。",
+        10: "MSH-10 控制编号 1，用于消息去重与 ACK 配对。",
+        11: "MSH-11 处理标识 P，表示消息为生产环境数据。",
+        12: "MSH-12 版本号 2.5。",
+      },
+    },    {
+      fields: ["PID", "1", "", "P000098^^^HOSPITAL", "", "MRN2026112601^^^HOSPITAL", "", "19850612", "M"],
+      descs: {
+        1: "PID-1 集合序号 1。",
+        2: "PID-2 患者标识列表，此处留空。",
+        3: "PID-3 患者标识列表 P000098^^^HOSPITAL，首段为院内患者编号。",
+        4: "PID-4 患者姓名，此处留空。",
+        5: "PID-5 病人标识列表 MRN2026112601^^^HOSPITAL，院方病案号。",
+        6: "PID-6 母亲姓名，此处留空。",
+        7: "PID-7 出生日期 19850612。",
+        8: "PID-8 患者性别 M。",
+      },
+    },
+    {
+      fields: ["OBR", "1", "ORD2026112601", "P000098", "HR^Heart Rate^LN", "", "", "", "20261126120000"],
+      descs: {
+        1: "OBR-1 集合序号 1。",
+        2: "OBR-2 placer 订单号，由采集端分配。",
+        3: "OBR-3 filler 订单号，此处填入患者编号便于回溯。",
+        4: "OBR-4 通用检验标识 HR^Heart Rate^LN，给出本次上报的观察项。",
+        5: "OBR-5 优先级，此处留空。",
+        6: "OBR-6 请求日期时间，此处留空。",
+        7: "OBR-7 观察日期时间，此处留空。",
+        8: "OBR-8 观察结束时间 20261126120000。",
+      },
+    },
+    {
+      fields: ["OBX", "1", "NM", "8867-4^Heart rate^LN", "", "72", "bpm", "", "", "", "", "F"],
+      descs: {
+        1: "OBX-1 序号 1。",
+        2: "OBX-2 值类型 NM，表示数值型。",
+        3: "OBX-3 观察标识 8867-4^Heart rate^LN，首段为 LOINC 编码。",
+        4: "OBX-4 观察值子标识，此处留空。",
+        5: "OBX-5 观察值 72。",
+        6: "OBX-6 单位 bpm。",
+        7: "OBX-7 参考范围下限，此处留空。",
+        8: "OBX-8 参考范围上限，此处留空。",
+        9: "OBX-9 异常标志，此处留空。",
+        10: "OBX-10 异常性质，此处留空。",
+        11: "OBX-11 观察结果状态 F，表示最终结果。",
+      },
+    },
+    {
+      fields: ["OBX", "2", "NM", "2708-6^SpO2^LN", "", "98", "%", "", "", "", "", "F"],
+      descs: {
+        1: "OBX-1 序号 2。",
+        2: "OBX-2 值类型 NM。",
+        3: "OBX-3 观察标识 2708-6^SpO2^LN，LOINC 编码 2708-6。",
+        4: "OBX-4 观察值子标识，此处留空。",
+        5: "OBX-5 观察值 98。",
+        6: "OBX-6 单位 %。",
+        7: "OBX-7 至 OBX-10 留空。",
+        11: "OBX-11 观察结果状态 F。",
+      },
+    },
+    {
+      fields: ["OBX", "3", "NM", "9279-1^Respiratory rate^LN", "", "16", "/min", "", "", "", "", "F"],
+      descs: {
+        1: "OBX-1 序号 3。",
+        2: "OBX-2 值类型 NM。",
+        3: "OBX-3 观察标识 9279-1^Respiratory rate^LN，LOINC 编码 9279-1。",
+        4: "OBX-4 观察值子标识，此处留空。",
+        5: "OBX-5 观察值 16。",
+        6: "OBX-6 单位 /min。",
+        7: "OBX-7 至 OBX-10 留空。",
+        11: "OBX-11 观察结果状态 F。",
+      },
+    },
   ],
 });
 
@@ -577,35 +746,53 @@ binary({
   ],
 });
 
-text({
+hl7({
   slug: "drager-perseus-hl7",
   brand: "Dräger",
   title: "HL7 v2 通用",
-  body:
-    "MSH|^~\\&|MIDDLEWARE|CENTRAL|||20261126120000||ORU^R01|1|P|2.5\r" +
-    "OBX|1|NM|HR^Heart Rate||60|bpm|||||F\r",
   segments: [
-    { mark: "MSH", len: 3, desc: "段标识 MSH，消息头段。" },
-    { mark: "|", len: 1, desc: "字段分隔符竖线 0x7C。" },
-    { mark: "^~\\&", len: 4, desc: "编码字符集 MSH-2，^~\\& 表示 UTF-8（Unicode 2.2）。" },
-    { mark: "|", len: 1, desc: "字段分隔符。" },
-    { mark: "MIDDLEWARE|CENTRAL", len: 18, desc: "MSH-3 发送方 MIDDLEWARE，MSH-4 接收方 CENTRAL。" },
-    { mark: "|||", len: 3, desc: "MSH-5、MSH-6 空字段与分隔符。" },
-    { mark: "20261126120000", len: 14, desc: "MSH-7 消息时间 20261126120000。" },
-    { mark: "||", len: 2, desc: "MSH-8 空字段与分隔符。" },
-    { mark: "ORU^R01", len: 7, desc: "MSH-9 消息类型 ORU^R01。" },
-    { mark: "|1|P|2.5", len: 8, desc: "MSH-10 控制编号 1，MSH-11 处理标识 P，MSH-12 版本 2.5。" },
-    { mark: "\r", len: 1, desc: "回车 0x0D，MSH 段结束。" },
-    { mark: "OBX", len: 3, desc: "段标识 OBX，观察结果段。" },
-    { mark: "|1|NM", len: 5, desc: "OBX-1 序号 1，OBX-2 值类型 NM 表示数值。" },
-    { mark: "|", len: 1, desc: "字段分隔符。" },
-    { mark: "HR^Heart Rate", len: 13, desc: "OBX-3 观察标识 HR^Heart Rate。" },
-    { mark: "||", len: 2, desc: "OBX-4 观察值子标识为空。" },
-    { mark: "60", len: 2, desc: "OBX-5 数值 60。" },
-    { mark: "|bpm", len: 4, desc: "OBX-6 单位 bpm。" },
-    { mark: "|||||", len: 5, desc: "OBX-7 至 OBX-10 为空字段及其分隔符。" },
-    { mark: "F", len: 1, desc: "OBX-11 状态 F，最终结果。" },
-    { mark: "\r", len: 1, desc: "回车 0x0D，OBX 段结束。" },
+    {
+      fields: [
+        "MSH",
+        "^~\\&",
+        "MIDDLEWARE",
+        "CENTRAL",
+        "",
+        "",
+        "20261126120000",
+        "",
+        "ORU^R01",
+        "1",
+        "P",
+        "2.5",
+      ],
+      descs: {
+        2: "MSH-2 编码字符集 ^~\\&，表示 UTF-8（Unicode 2.2）。",
+        3: "MSH-3 发送方应用 MIDDLEWARE，标识数据来自中间件。",
+        4: "MSH-4 发送方设施 CENTRAL，标识本条消息发往的目标系统。",
+        5: "MSH-5 接收方应用，此处留空。",
+        6: "MSH-6 接收方设施，此处留空。",
+        7: "MSH-7 消息时间 20261126120000。",
+        8: "MSH-8 安全信息，此处留空。",
+        9: "MSH-9 消息类型 ORU^R01。",
+        10: "MSH-10 控制编号 1。",
+        11: "MSH-11 处理标识 P。",
+        12: "MSH-12 版本号 2.5。",
+      },
+    },
+    {
+      fields: ["OBX", "1", "NM", "HR^Heart Rate", "", "60", "bpm", "", "", "", "", "F"],
+      descs: {
+        1: "OBX-1 序号 1。",
+        2: "OBX-2 值类型 NM 表示数值。",
+        3: "OBX-3 观察标识 HR^Heart Rate。",
+        4: "OBX-4 观察值子标识，此处留空。",
+        5: "OBX-5 观察值 60。",
+        6: "OBX-6 单位 bpm。",
+        7: "OBX-7 至 OBX-10 留空。",
+        11: "OBX-11 观察结果状态 F，表示最终结果。",
+      },
+    },
   ],
 });
 
@@ -615,7 +802,7 @@ let problems = 0;
 const results = [];
 
 for (const p of protocols) {
-  const { frame, segments } = p.build();
+  const { frame, segments, text, display } = p.build();
   const issues = [];
 
   // 分段必须连续且完整覆盖整帧
@@ -631,13 +818,30 @@ for (const p of protocols) {
     issues.push(`分段未覆盖整帧：覆盖到 ${cursor}，帧长 ${frame.length}`);
   }
 
+  // 文本协议的报文原文必须与字节流一致
+  if (text !== undefined) {
+    if (Buffer.from(text, "ascii").length !== frame.length) {
+      issues.push(
+        `报文原文长度与字节流不一致：原文 ${Buffer.from(text, "ascii").length} 字节，字节流 ${frame.length} 字节`,
+      );
+    }
+  }
+
   if (issues.length) {
     problems++;
     console.log(`\n[问题] ${p.slug}`);
     for (const i of issues) console.log(`   - ${i}`);
   }
 
-  results.push({ slug: p.slug, brand: p.brand, title: p.title, frame, segments });
+  results.push({
+    slug: p.slug,
+    brand: p.brand,
+    title: p.title,
+    frame,
+    segments,
+    text,
+    display,
+  });
 }
 
 if (!CHECK_ONLY) {
@@ -645,9 +849,18 @@ if (!CHECK_ONLY) {
   for (const r of results) {
     out.push(`### ${r.slug}  (${r.brand} ${r.title})`);
     out.push(`  sampleHex: "${fmt(r.frame)}"`);
+    // 文本协议额外给出可读的报文原文，页面与样本包据此按字符串展示
+    if (r.text !== undefined) {
+      out.push(`  sampleText: ${JSON.stringify(r.text)}`);
+      out.push(`  sampleDisplay: ${JSON.stringify(r.display)}`);
+    }
     for (const s of r.segments) {
       const bytes = r.frame.slice(s.span[0], s.span[1]);
-      out.push(`    { hex: "${fmt(bytes)}", desc: ${JSON.stringify(s.desc)} },`);
+      const textField =
+        s.text === undefined ? "" : `, text: ${JSON.stringify(s.text)}`;
+      out.push(
+        `    { hex: "${fmt(bytes)}", desc: ${JSON.stringify(s.desc)}${textField} },`,
+      );
     }
     out.push("");
   }
