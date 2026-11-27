@@ -52,9 +52,15 @@ export type CodeExample = {
   slug: string;
   title: string;
   desc: string;
-  lang: "csharp" | "java";
+  lang: "csharp" | "java" | "python";
   filename: string;
   dependency?: string;
+  code: string;
+};
+
+/** 按协议 slug 索引的 Python 示例源码 */
+export type PythonSource = {
+  filename: string;
   code: string;
 };
 

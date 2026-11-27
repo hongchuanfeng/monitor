@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import AdSlot from "@/components/AdSlot";
 import CodeExamplesClient from "@/components/CodeExamplesClient";
+import ProtocolPythonList from "@/components/ProtocolPythonList";
 
 export const metadata: Metadata = {
   title: "连接示例代码",
   description:
-    "监护仪与麻醉机的 C# 与 Java 连接示例代码，涵盖串口连接、TCP 连接、帧解析器、断线重连看门狗与生理参数输出，共五组完整实现。",
+    "监护仪与麻醉机的 C#、Java 与 Python 连接示例代码，涵盖串口连接、TCP 连接、帧解析器、断线重连看门狗与生理参数输出，共五组完整实现，并附全部 24 款设备的 Python 帧解析器。",
   alternates: { canonical: "/code/" },
 };
 
@@ -22,13 +23,15 @@ export default function CodePage() {
 
         <h1 className="page-title">连接示例代码</h1>
         <p className="page-subtitle">
-          完整的 C# 与 Java 连接实现，覆盖串口与 TCP 接入、帧解析、断线重连与参数输出。
-          两套实现结构保持一致，便于逐节对照阅读。
+          完整的 C#、Java 与 Python 连接实现，覆盖串口与 TCP 接入、帧解析、断线重连与参数输出。
+          三套实现结构保持一致，便于逐节对照阅读。
         </p>
 
         <AdSlot format="banner" />
 
         <CodeExamplesClient />
+
+        <ProtocolPythonList />
 
         <div className="callout callout--info" style={{ marginTop: 24 }}>
           <span className="callout__icon" aria-hidden="true">

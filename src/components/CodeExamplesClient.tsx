@@ -3,14 +3,24 @@
 import { useState } from "react";
 import CodeBlock from "./CodeBlock";
 import { codeExamples, codeExampleGroups } from "@/data/code-examples";
+import { pythonCodeExamples } from "@/data/code-examples-python";
 
 const LANGS = [
   { key: "csharp", label: "C# (.NET)" },
   { key: "java", label: "Java" },
+  { key: "python", label: "Python" },
 ] as const;
 
+type Lang = (typeof LANGS)[number]["key"];
+
+/** 取指定语言下的示例：Python 来自独立文件，其余在 code-examples 中 */
+function findExample(slug: string, lang: Lang) {
+  const pool = lang === "python" ? pythonCodeExamples : codeExamples;
+  return pool.find((e) => e.slug === slug && e.lang === lang);
+}
+
 export default function CodeExamplesClient() {
-  const [lang, setLang] = useState<"csharp" | "java">("csharp");
+  const [lang, setLang] = useState<Lang>("csharp");
   const [activeGroup, setActiveGroup] = useState(codeExampleGroups[0].slug);
 
   return (
@@ -46,8 +56,7 @@ export default function CodeExamplesClient() {
 
         <div>
           {codeExampleGroups.map((g) => {
-            const gItems = codeExamples.filter((e) => e.slug === g.slug);
-            const gPrimary = gItems.find((e) => e.lang === lang);
+            const gPrimary = findExample(g.slug, lang);
             if (!gPrimary) return null;
             const isActive = activeGroup === g.slug;
             return (
@@ -68,7 +77,7 @@ export default function CodeExamplesClient() {
                   )}
                 </h2>
                 <p className="text-muted" style={{ margin: "0 0 14px" }}>
-                  {g.desc}
+                  {gPrimary.desc}
                 </p>
                 {gPrimary.dependency && (
                   <p
@@ -81,7 +90,7 @@ export default function CodeExamplesClient() {
                 <CodeBlock
                   code={gPrimary.code}
                   filename={gPrimary.filename}
-                  meta={lang === "csharp" ? "C# / .NET" : "Java"}
+                  meta={LANGS.find((l) => l.key === lang)?.label}
                   language={lang}
                 />
               </section>

@@ -7,7 +7,7 @@ type AdFormat = "banner" | "rectangle" | "half" | "inline" | "mobile";
 
 type Props = {
   format?: AdFormat;
-  /** AdSense 广告位 ID；未配置时显示占位 */
+  /** AdSense 广告位 ID；未配置时展示站内自制横幅图 */
   slot?: string;
   /** 是否允许投放个性化广告（未个性化同意时仅展示非个性化） */
   className?: string;
@@ -26,6 +26,22 @@ const FORMAT_LABEL: Record<AdFormat, string> = {
   inline: "内嵌",
   mobile: "移动端",
 };
+
+/** 各规格对应的自制横幅图（纯背景色 + 文案），未接入 AdSense 时兜底展示 */
+const FORMAT_IMAGE: Record<AdFormat, string> = {
+  banner: "/ads/banner.svg",
+  rectangle: "/ads/rectangle.svg",
+  half: "/ads/half.svg",
+  inline: "/ads/inline.svg",
+  mobile: "/ads/mobile.svg",
+};
+
+/** 横幅类（顶部 / 内嵌）在窄屏下改用 320x50 的移动端图 */
+const BANNER_FORMATS: AdFormat[] = ["banner", "inline"];
+
+function isBannerFormat(format: AdFormat): boolean {
+  return BANNER_FORMATS.includes(format);
+}
 
 export default function AdSlot({ format = "banner", slot, className }: Props) {
   const { decided, personalized } = useConsent();
@@ -62,7 +78,6 @@ export default function AdSlot({ format = "banner", slot, className }: Props) {
       className={`ad-slot ad-slot--${format}${className ? ` ${className}` : ""}`}
       aria-label="广告"
     >
-      <span className="ad-slot__label">广告</span>
       <div className="ad-slot__inner">
         {slot ? (
           <ins
@@ -73,10 +88,27 @@ export default function AdSlot({ format = "banner", slot, className }: Props) {
             data-full-width-responsive="true"
           />
         ) : (
-          <p className="ad-slot__placeholder">
-            广告位预留（{FORMAT_LABEL[format]}）
-            <span>配置 NEXT_PUBLIC_ADSENSE_CLIENT 后自动加载</span>
-          </p>
+          <picture>
+            <source media="(max-width: 639px)" srcSet={FORMAT_IMAGE.mobile} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              className="ad-slot__banner"
+              src={FORMAT_IMAGE[format]}
+              alt={`监护仪与麻醉机通讯协议文档库 · ${FORMAT_LABEL[format]}`}
+              width={
+                format === "rectangle" || format === "half" ? 300 : isBannerFormat(format) ? 1100 : 320
+              }
+              height={
+                format === "rectangle"
+                  ? 250
+                  : format === "half"
+                    ? 600
+                    : format === "mobile"
+                      ? 50
+                      : 92
+              }
+            />
+          </picture>
         )}
       </div>
     </aside>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="92" viewBox="0 0 1100 92" role="img" aria-label="监护仪与麻醉机通讯协议文档库">
+<rect width="1100" height="92" fill="#0F62FE"/>
+<rect x="0" y="0" width="1100" height="4" fill="#0043CE"/>
+<text x="36" y="42" font-size="26" font-weight="700" fill="#FFFFFF" font-family="'PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">监护仪与麻醉机通讯协议文档库</text>
+<text x="36" y="68" font-size="14" font-weight="400" fill="#CFE2FF" font-family="'PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">帧格式 · 数据字典 · 报文示例 · C# / Java 连接示例</text>
+<rect x="940" y="28" width="124" height="38" rx="6" fill="#FFFFFF"/>
+<text x="1002" y="52.04" font-size="14" font-weight="600" fill="#0F62FE" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">免费查阅</text>
+</svg>

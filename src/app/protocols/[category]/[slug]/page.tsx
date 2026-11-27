@@ -6,6 +6,8 @@ import CodeBlock from "@/components/CodeBlock";
 import SideNav, { type TocItem } from "@/components/SideNav";
 import { getAllProtocols, getProtocolBySlug } from "@/data";
 import { codeExamples } from "@/data/code-examples";
+import { pythonExampleBySlug } from "@/data/python-examples";
+import { pythonSources } from "@/data/python-sources";
 import { categories, siteConfig } from "@/data/site";
 
 export function generateStaticParams() {
@@ -64,6 +66,8 @@ export default async function ProtocolDetailPage({
   const javaExample = codeExamples.find(
     (e) => e.slug === "frame-parser" && e.lang === "java",
   );
+  const pythonMeta = pythonExampleBySlug[p.slug];
+  const pythonSource = pythonSources[p.slug];
 
   const toc: TocItem[] = [
     { id: "overview", label: "协议概览" },
@@ -72,6 +76,7 @@ export default async function ProtocolDetailPage({
     { id: "dictionary", label: "数据字典" },
     { id: "commands", label: "命令与查询" },
     { id: "sample", label: "报文示例" },
+    { id: "python", label: "Python 实现" },
     { id: "code", label: "连接示例" },
     { id: "sources", label: "参考来源" },
     { id: "related", label: "相关协议" },
@@ -306,6 +311,43 @@ export default async function ProtocolDetailPage({
             </div>
 
             <AdSlot format="inline" />
+
+            {pythonSource && (
+              <>
+                <h2 id="python">Python 实现</h2>
+                <p>
+                  下面是针对本协议生成的 Python 3 帧解析器。它按本页「帧格式」表的结构
+                  定义实现：起始符定位、长度字段推导、校验和验证、数据区参数解析，
+                  与上方「报文示例」表逐段对应。
+                </p>
+                <div className="callout callout--info">
+                  <span className="callout__icon" aria-hidden="true">
+                    ℹ
+                  </span>
+                  <div>
+                    <p className="callout__title">可直接运行验证</p>
+                    <p className="callout__body">
+                      代码内置 demo，会用本页的示例报文做一次自检：校验和不过或帧结构
+                      对不上都会直接抛异常。保存为
+                      <code>{pythonSource.filename}</code> 后执行{" "}
+                      <code>python {pythonSource.filename}</code> 即可。
+                    </p>
+                  </div>
+                </div>
+                {pythonMeta?.notes?.length ? (
+                  <ul>
+                    {pythonMeta.notes.map((note, i) => (
+                      <li key={i}>{note}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                <CodeBlock
+                  code={pythonSource.code}
+                  filename={pythonSource.filename}
+                  language="python"
+                />
+              </>
+            )}
 
             <h2 id="code">连接示例</h2>
             <p>

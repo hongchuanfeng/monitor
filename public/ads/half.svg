@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="600" viewBox="0 0 300 600" role="img" aria-label="监护仪与麻醉机通讯协议文档库">
+<rect width="300" height="600" fill="#0F62FE"/>
+<rect x="0" y="0" width="300" height="3" fill="#0043CE"/>
+<text x="24" y="80" font-size="24" font-weight="700" fill="#FFFFFF" font-family="'PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">监护仪与麻醉</text>
+<text x="24" y="114" font-size="24" font-weight="700" fill="#FFFFFF" font-family="'PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">机通讯协议文档库</text>
+<text x="24" y="150" font-size="13" font-weight="400" fill="#CFE2FF" font-family="'PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">帧格式 · 数据字典 · 报文示例</text>
+<text x="24" y="172" font-size="13" font-weight="400" fill="#CFE2FF" font-family="'PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">C# / Java 连接示例</text>
+<text x="24" y="230" font-size="14" font-weight="400" fill="#FFFFFF" font-family="'PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">· 迈瑞 BeneVision</text>
+<text x="24" y="262" font-size="14" font-weight="400" fill="#FFFFFF" font-family="'PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">· Philips IntelliVue</text>
+<text x="24" y="294" font-size="14" font-weight="400" fill="#FFFFFF" font-family="'PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">· GE CARESCAPE</text>
+<text x="24" y="326" font-size="14" font-weight="400" fill="#FFFFFF" font-family="'PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">· Dräger Perseus</text>
+<text x="24" y="358" font-size="14" font-weight="400" fill="#FFFFFF" font-family="'PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">· Masimo / Nihon Kohden</text>
+<rect x="24" y="404" width="104" height="36" rx="6" fill="#FFFFFF"/>
+<text x="76" y="427.04" font-size="14" font-weight="600" fill="#0F62FE" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">免费查阅</text>
+</svg>
